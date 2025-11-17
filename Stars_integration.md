@@ -1,0 +1,1 @@
+Telegram Stars & Payments guide placeholder

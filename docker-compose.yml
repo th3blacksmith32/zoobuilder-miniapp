@@ -1,0 +1,19 @@
+
+version: '3.8'
+services:
+  web:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      - BOT_TOKEN=${BOT_TOKEN}
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: zoobuilder
+      POSTGRES_USER: zoouser
+      POSTGRES_PASSWORD: zoopass
+    volumes:
+      - db_data:/var/lib/postgresql/data
+volumes:
+  db_data:

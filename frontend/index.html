@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>ZooBuilder Tycoon - Telegram Mini App (Prototype)</title>
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    body { font-family: Arial, Helvetica, sans-serif; background:#e9f7ef; margin:0; padding:12px; }
+    .topbar { display:flex; gap:12px; align-items:center; }
+    .stat { background:#fff; padding:8px 12px; border-radius:8px; box-shadow:0 2px 4px rgba(0,0,0,0.1); }
+    .enclosure { margin-top:18px; background:#fff; padding:16px; border-radius:12px; max-width:720px; }
+    .buttons { margin-top:12px; display:flex; gap:8px; flex-wrap:wrap; }
+    button { padding:10px 12px; border-radius:8px; border:none; cursor:pointer; }
+    button.primary{ background:#4caf50; color:#fff; }
+    button.secondary{ background:#ffb74d; color:#333; }
+    .hint { font-size:12px;color:#666;margin-top:8px; }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="stat">Coins: <span id="coins">500</span></div>
+    <div class="stat">Gems: <span id="gems">10</span></div>
+    <div class="stat">Visitors: <span id="visitors">12</span></div>
+    <div style="margin-left:auto;" id="tg-info" class="stat">Telegram: Not ready</div>
+  </div>
+
+  <div class="enclosure">
+    <h3 id="enc_name">Small Rabbit Enclosure (Lv.1)</h3>
+    <div>Animal: <span id="animal_name">Rabbit</span></div>
+    <div>Income / min: <span id="inc">1</span></div>
+    <div>Capacity: <span id="cap">5</span></div>
+    <div>Keepers assigned: <span id="keepers">0</span></div>
+    <div style="margin-top:8px;">Accrued coins: <b id="accrued">0</b></div>
+
+    <div class="buttons">
+      <button class="primary" onclick="collect()">Collect</button>
+      <button class="secondary" onclick="assignKeeper()">Assign Keeper (150c)</button>
+      <button onclick="upgrade()">Upgrade Enclosure (300c)</button>
+      <button onclick="buyAnimal()">Buy Animal (100c)</button>
+    </div>
+    <div class="hint">Tip: Use the Telegram Main Button to send data to your bot (works in the Telegram client).</div>
+    <div style="margin-top:12px;">Status: <span id="status">Idle</span></div>
+  </div>
+
+<script>
+// Basic game state (prototype)
+let state = {
+  coins: 500,
+  gems: 10,
+  visitors: 12,
+  inc_per_min: 1,
+  capacity: 5,
+  keepers: 0,
+  animal_count: 1,
+  accrued: 0,
+  lastTick: Date.now()
+};
+
+// Update loop (1s)
+function tick() {
+  const now = Date.now();
+  const delta = (now - state.lastTick)/1000; // seconds
+  state.lastTick = now;
+  const rate = (state.inc_per_min/60) * state.animal_count * (state.visitors/10) * (1 + state.keepers*0.2);
+  state.accrued += rate * delta;
+  document.getElementById('accrued').innerText = Math.floor(state.accrued);
+  document.getElementById('coins').innerText = Math.floor(state.coins);
+  document.getElementById('gems').innerText = state.gems;
+}
+setInterval(tick, 1000);
+
+// Game actions
+function collect() {
+  state.coins += Math.floor(state.accrued);
+  state.accrued = 0;
+  document.getElementById('status').innerText = 'Collected!';
+  document.getElementById('coins').innerText = Math.floor(state.coins);
+  // Update Telegram Main Button text with new coin amount
+  if(window.Telegram && window.Telegram.WebApp) {
+    window.Telegram.WebApp.MainButton.setText('Send summary to bot');
+    window.Telegram.WebApp.MainButton.show();
+  }
+}
+
+function assignKeeper() {
+  if(state.coins >= 150) {
+    state.coins -= 150;
+    state.keepers += 1;
+    document.getElementById('keepers').innerText = state.keepers;
+    document.getElementById('coins').innerText = Math.floor(state.coins);
+  } else { alert('Not enough coins'); }
+}
+
+function upgrade() {
+  if(state.coins >= 300) {
+    state.coins -= 300;
+    state.inc_per_min = Math.round(state.inc_per_min * 1.5);
+    document.getElementById('inc').innerText = state.inc_per_min;
+    document.getElementById('coins').innerText = Math.floor(state.coins);
+    document.getElementById('enc_name').innerText = 'Small Rabbit Enclosure (Lv.2)';
+  } else { alert('Not enough coins'); }
+}
+
+function buyAnimal() {
+  if(state.coins >= 100 && state.animal_count < state.capacity) {
+    state.coins -= 100;
+    state.animal_count += 1;
+    document.getElementById('animal_name').innerText = 'Rabbit x' + state.animal_count;
+    document.getElementById('coins').innerText = Math.floor(state.coins);
+  } else { alert('Cannot buy - check coins or capacity'); }
+}
+
+// Telegram Web App integration
+function initTelegram() {
+  if(!window.Telegram || !window.Telegram.WebApp) {
+    document.getElementById('tg-info').innerText = 'Telegram WebApp not detected (testing outside Telegram).';
+    return;
+  }
+  const TG = window.Telegram.WebApp;
+  TG.expand(); // expand to full screen in client
+  TG.MainButton.setText('Send summary to bot');
+  TG.MainButton.show();
+
+  // Example: when MainButton clicked, send a JSON summary to the bot
+  TG.onEvent('mainButtonClicked', function(){
+    const payload = {
+      coins: Math.floor(state.coins),
+      gems: state.gems,
+      accrued: Math.floor(state.accrued),
+      action: 'summary_click'
+    };
+    // sendData will forward payload (string) to your bot through the Web App data flow
+    TG.sendData(JSON.stringify(payload));
+  });
+
+  // Read init data and display user info if available
+  try {
+    const initData = TG.initData || TG.initDataUnsafe || null;
+    if(initData) {
+      document.getElementById('tg-info').innerText = 'Telegram client detected';
+    } else {
+      document.getElementById('tg-info').innerText = 'Telegram WebApp loaded';
+    }
+  } catch(e) {
+    document.getElementById('tg-info').innerText = 'Telegram init error';
+  }
+}
+
+// Auto-init when script runs
+window.addEventListener('load', function(){ initTelegram(); });
+
+</script>
+</body>
+</html>
